@@ -97,7 +97,7 @@ The AGCD data files are not CF compliant and are thus incompatible with the xcli
 so the `--dataset AGCD` option triggers some metadata fixes so that xclim can process the data.
 
 
-## Fit parametes
+## Fit parameters
 
 To assess the validity of return periods it is common to assess the parameters for the
 probability distribution that was fitted to the data during the return period calculation.
