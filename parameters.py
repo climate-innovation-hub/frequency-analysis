@@ -7,6 +7,7 @@ import xarray as xr
 from xclim.indices.generic import select_resample_op
 from xclim.indices.stats import frequency_analysis, fit
 import dask.diagnostics
+from dask.distributed import Client, LocalCluster, progress
     
 import return_period
 
@@ -24,7 +25,8 @@ def get_parameters(da, distribution, mode, month=None, season=None):
         op=mode,
         freq='Y',
         **indexer)
-    sub = sub.chunk({'time': -1})
+    #sub = sub.chunk({'time': -1})
+    sub = sub.compute()
     params = fit(sub, dist=distribution)
 
     return params
@@ -33,14 +35,21 @@ def get_parameters(da, distribution, mode, month=None, season=None):
 def main(args):
     """Run the program."""
     
-    dask.diagnostics.ProgressBar().register()
-    logging.basicConfig(level=logging.DEBUG)
+    if args.local_cluster:
+        assert args.dask_dir, "Must provide --dask_dir for local cluster"
+        dask.config.set(temporary_directory=args.dask_dir)
+        cluster = LocalCluster(n_workers=args.nworkers)
+        client = Client(cluster)
+        print("Watch progress at http://localhost:8787/status")
+    else:
+        dask.diagnostics.ProgressBar().register()
 
     ds = return_period.read_data(args.infiles, args.var, dataset_name=args.dataset)
     ds = return_period.subset_and_chunk(
         ds,
         args.var,
         time_period=args.time_period,
+        lon_chunk_size=args.lon_chunk_size,
     )
     params = get_parameters(
         ds[args.var],
@@ -108,6 +117,33 @@ if __name__ == '__main__':
         default=None,
         help='Apply dataset and variable specific metadata fixes for CF compliance',
     )
+    parser.add_argument(
+        "--local_cluster",
+        action="store_true",
+        default=False,
+        help='Use a local dask cluster',
+    )
+    parser.add_argument(
+        "--dask_dir",
+        type=str,
+        default=None,
+        help='Directory where dask worker space files can be written. Required for local cluster.',
+    )
+    parser.add_argument(
+        "--nworkers",
+        type=int,
+        default=None,
+        help='Number of workers for cluster',
+    )
+    parser.add_argument(
+        "--lon_chunk_size",
+        type=int,
+        default=None,
+        help='Size of longitude chunks (i.e. number of lons in each chunk)',
+    )
     args = parser.parse_args()
-    main(args)
+    logging.basicConfig(level=logging.DEBUG)
+    with dask.diagnostics.ResourceProfiler() as rprof:
+        main(args)
+    return_period.profiling_stats(rprof)
 
