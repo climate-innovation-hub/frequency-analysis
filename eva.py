@@ -1,5 +1,5 @@
 """Command line program for conducting extreme value analysis using the block maxima method."""
-import pdb
+
 import argparse
 import logging
 
@@ -97,7 +97,7 @@ def subset_and_chunk(ds, var, time_period=None, lon_chunk_size=None):
 
 #    selection_lat = (ds['lat'] >= -35) & (ds['lat'] <= -33)
 #    selection_lon = (ds['lon'] >= 133) & (ds['lon'] <= 135)
-#   ds = ds.where(selection_lat & selection_lon, drop=True)
+#    ds = ds.where(selection_lat & selection_lon, drop=True)
 
     chunk_dict = {'time': -1}
     if lon_chunk_size:
