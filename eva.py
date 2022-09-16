@@ -1,12 +1,13 @@
-"""Command line program for calculating return periods."""
-
+"""Command line program for conducting extreme value analysis using the block maxima method."""
+import pdb
 import argparse
 import logging
 
 import git
 import numpy as np
 import xarray as xr
-from xclim.indices.stats import frequency_analysis
+from xclim.indices.generic import select_resample_op
+from xclim.indices.stats import fit, parametric_quantile
 import dask.diagnostics
 from dask.distributed import Client, LocalCluster, progress
 import cmdline_provenance as cmdprov
@@ -94,6 +95,10 @@ def subset_and_chunk(ds, var, time_period=None, lon_chunk_size=None):
         start_date, end_date = time_period
         ds = ds.sel({'time': slice(start_date, end_date)})
 
+#    selection_lat = (ds['lat'] >= -35) & (ds['lat'] <= -33)
+#    selection_lon = (ds['lon'] >= 133) & (ds['lon'] <= 135)
+#   ds = ds.where(selection_lat & selection_lon, drop=True)
+
     chunk_dict = {'time': -1}
     if lon_chunk_size:
         chunk_dict['lon'] = lon_chunk_size
@@ -104,23 +109,41 @@ def subset_and_chunk(ds, var, time_period=None, lon_chunk_size=None):
     return ds
 
 
-def calc_return_periods(da, periods, distribution, mode, month=None, season=None):
-    """Calculate return periods"""
+def extreme_value_analysis(da, mode, distribution, fit_method, quantiles, month=None, season=None):
+    """Perform extreme value analysis using the block maxima method.
+
+    Parameters
+    ----------
+    da : xarray DataArray
+    mode : {'min', 'max'}
+        Look for probability of exceedance (max) or non-exceedance (min)
+    distribution : {'genextreme', 'gennorm', 'gumbel_r', 'gumbel_l'} 
+        Name of the univariate probability distribution
+    fit_method : {'ML', 'PWM'}
+        Fitting method, either maximum likelihood (ML) or probability weighted moments (PWM; aka l-moments)
+    quantiles : Union[float, sequence]
+        Quantiles to compute, which must be between 0 and 1 (inclusive)
+    month : list
+        Restrict analysis to these months (list of month numbers)
+    season : {'DJF', 'MAM', 'JJA', 'SON'}
+        Restrict analysis to a particular season
+        
+    Returns
+    -------
+    eva_da : xarray DataArray
+    """
 
     indexer = {}
     if season:
         indexer = {'season': season}
     elif month:
         indexer = {'month': month}
-    return_periods = frequency_analysis(
-        da,
-        t=periods,
-        dist=distribution,
-        mode=mode,
-        **indexer
-    )
-
-    return return_periods
+    block_values = select_resample_op(da, op=mode, freq='Y', **indexer)
+    block_values = block_values.chunk({'time': -1})
+    params = fit(block_values, dist=distribution, method=fit_method)
+    eva_da = parametric_quantile(params, q=quantiles)
+   
+    return eva_da
 
 
 def main(args):
@@ -142,18 +165,19 @@ def main(args):
         time_period=args.time_period,
         lon_chunk_size=args.lon_chunk_size,
     )
-    return_periods = calc_return_periods(
+    eva_da = extreme_value_analysis(
         ds[args.var],
-        args.return_periods,
-        args.distribution,
         args.mode,
+        args.distribution,
+        args.fit_method,
+        args.quantiles,
         month=args.month,
         season=args.season,
     )
     if args.local_cluster:
-        return_periods = return_periods.persist()
-        progress(return_periods)
-    output_ds = return_periods.to_dataset()
+        eva_da = eva_da.persist()
+        progress(eva_da)
+    output_ds = eva_da.to_dataset()
     
     output_ds.attrs = ds.attrs
     output_ds.attrs['history'] = get_new_log(args.infiles[0], ds.attrs['history'])
@@ -170,11 +194,11 @@ if __name__ == '__main__':
     parser.add_argument("var", type=str, help="variable name")
     parser.add_argument("outfile", type=str, help="output file name")
     parser.add_argument(
-        "--return_periods",
+        "--quantiles",
         type=float,
         nargs='*',
         required=True,
-        help='return periods (in years) to include in outfile [required]',
+        help='quantiles to include in outfile (must lie between 0 and 1 inclusive) [required]',
     )         
     parser.add_argument(
         "--mode",
@@ -184,19 +208,26 @@ if __name__ == '__main__':
         help='probability of exceedance (max) or non-exceedance (min) [default=max]',
     )
     parser.add_argument(
+        "--distribution",
+        type=str,
+        choices=['genextreme', 'gennorm', 'gumbel_r', 'gumbel_l'],
+        default='genextreme',
+        help='Name of the univariate probability distribution [default=genextreme]',
+    )
+    parser.add_argument(
+        "--fit_method",
+        type=str,
+        choices=['ML', 'PWM'],
+        default='ML',
+        help='Fitting method, either maximum likelihood (ML) or probability weighted moments (PWM; aka l-moments) [default=ML]',
+    )
+    parser.add_argument(
         "--time_period",
         type=str,
         nargs=2,
         default=None,
         metavar=('START_DATE', 'END_DATE'),
         help='Time period in YYYY-MM-DD format',
-    )
-    parser.add_argument(
-        "--distribution",
-        type=str,
-        choices=['genextreme', 'gennorm', 'gumbel_r', 'gumbel_l'],
-        default='genextreme',
-        help='Name of the univariate probability distribution [default=genextreme]',
     )
     parser.add_argument(
         "--season",
