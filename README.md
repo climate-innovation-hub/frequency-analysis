@@ -6,29 +6,43 @@ The programs make use of the frequency analysis capability built into the xclim 
 which is described at:  
 https://xclim.readthedocs.io/en/stable/notebooks/frequency_analysis.html
 
+## Environment
+
 If you're a member of the `wp00` project on NCI
 (i.e. if you're part of the CSIRO Climate Innovation Hub),
 the easiest way to use the scripts in this directory is to use the cloned copy at `/g/data/wp00/shared_code/frequency-analysis/`.
 They can be run using the Python environment at `/g/data/wp00/users/dbi599/miniconda3/envs/cih/bin/python`.
 
-## Return periods
+If you'd like to run the scripts in your own Python environment,
+you'll need to install the following libraries using conda...
+```
+conda install -c conda-forge xclim cmdline_provenance
+```
+... and then the following with the python package installer:
+```
+$ pip install gitpython
+$ pip install git+https://github.com/OpenHydrology/lmoments3.git@develop#egg=lmoments3
+```
 
-The `return_period.py` script calculates return period/s of interest.
+## Extreme value analysis
+
+The `eva.py` script performs extreme value analysis using the block maxima method.
 
 Running the script at the command line with the `-h` option explains the user options:
 
 ```bash
-$ /g/data/wp00/users/dbi599/miniconda3/envs/cih/bin/python /g/data/wp00/shared_code/frequency-analysis/return_period.py -h
+$ /g/data/wp00/users/dbi599/miniconda3/envs/cih/bin/python /g/data/wp00/shared_code/frequency-analysis/eva.py -h
 ```
 
 ```
-usage: return_period.py [-h] --return_periods [RETURN_PERIODS ...] [--mode {min,max}] [--time_period START_DATE END_DATE]
-                        [--distribution {genextreme,gennorm,gumbel_r,gumbel_l}] [--season {DJF,MAM,JJA,SON}] [--month [MONTH ...]]
-                        [--dataset {AGCD}] [--memory_vis] [--verbose] [--local_cluster] [--nworkers NWORKERS]
-                        [--lon_chunk_size LON_CHUNK_SIZE]
-                        [infiles ...] var outfile
+usage: eva.py [-h] --quantiles [QUANTILES ...] [--mode {min,max}]
+              [--distribution {genextreme,gennorm,gumbel_r,gumbel_l}] [--fit_method {ML,PWM}]
+              [--time_period START_DATE END_DATE] [--season {DJF,MAM,JJA,SON}] [--month [MONTH ...]]
+              [--dataset {AGCD}] [--memory_vis] [--verbose] [--local_cluster] [--dask_dir DASK_DIR]
+              [--nworkers NWORKERS] [--lon_chunk_size LON_CHUNK_SIZE]
+              [infiles ...] var outfile
 
-Command line program for calculating return periods.
+Command line program for conducting extreme value analysis using the block maxima method.
 
 positional arguments:
   infiles               input files
@@ -37,13 +51,16 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
-  --return_periods [RETURN_PERIODS ...]
-                        return periods (in years) to include in outfile [required]
+  --quantiles [QUANTILES ...]
+                        quantiles to include in outfile (must lie between 0 and 1 inclusive) [required]
   --mode {min,max}      probability of exceedance (max) or non-exceedance (min) [default=max]
-  --time_period START_DATE END_DATE
-                        Time period in YYYY-MM-DD format
   --distribution {genextreme,gennorm,gumbel_r,gumbel_l}
                         Name of the univariate probability distribution [default=genextreme]
+  --fit_method {ML,PWM}
+                        Fitting method, either maximum likelihood (ML) or probability weighted moments (PWM;
+                        aka l-moments) [default=ML]
+  --time_period START_DATE END_DATE
+                        Time period in YYYY-MM-DD format
   --season {DJF,MAM,JJA,SON}
                         Only process data for a given season [default is annual]
   --month [MONTH ...]   Only process data from a list of months [default is all months]
@@ -62,7 +79,7 @@ options:
 FFDI data could be processed to calculate the 20 year return period as follows:
 
 ```
-/g/data/wp00/users/dbi599/miniconda3/envs/cih/bin/python /g/data/wp00/shared_code/frequency-analysis/return_period.py /g/data/wp00/QQSCALE/GFDL-ESM2M/FFDI/rcp45/2016-2045/ffdi.????.nc FFDI ffdi_ARI_20yr_GFDL-ESM2M-QME_rcp45_2016-2045.nc --return_periods 20 --verbose --lon_chunk_size 5 --local_cluster --dask_dir /g/data/wp00/users/dbi599/
+/g/data/wp00/users/dbi599/miniconda3/envs/cih/bin/python /g/data/wp00/shared_code/frequency-analysis/eva.py /g/data/wp00/QQSCALE/GFDL-ESM2M/FFDI/rcp45/2016-2045/ffdi.????.nc FFDI ffdi_ARI_20yr_GFDL-ESM2M-QME_rcp45_2016-2045.nc --quantiles 0.95 --verbose --lon_chunk_size 5 --local_cluster --dask_dir /g/data/wp00/users/dbi599/
 ```
 
 In order to run the calculation in parallel,
@@ -83,14 +100,14 @@ the job file might look like the following:
 #PBS -l wd
 #PBS -l ncpus=5
 
-/g/data/wp00/users/dbi599/miniconda3/envs/cih/bin/python /g/data/wp00/shared_code/frequency-analysis/return_period.py /g/data/wp00/QQSCALE/GFDL-ESM2M/FFDI/rcp45/2016-2045/ffdi.????.nc FFDI /g/data/wp00/users/dbi599/test_space/ffdi_test.nc --return_periods 20 --verbose --lon_chunk_size 5 --local_cluster --dask_dir /g/data/wp00/users/dbi599/
+/g/data/wp00/users/dbi599/miniconda3/envs/cih/bin/python /g/data/wp00/shared_code/frequency-analysis/eva.py /g/data/wp00/QQSCALE/GFDL-ESM2M/FFDI/rcp45/2016-2045/ffdi.????.nc FFDI /g/data/wp00/users/dbi599/test_space/ffdi_test.nc --quantiles 0.95 --verbose --lon_chunk_size 5 --local_cluster --dask_dir /g/data/wp00/users/dbi599/
 ```
 
 ### Example 2
 
 AGCD precipitation data could be processed to calculate the 5, 10 and 20 year return period as follows:
 ```
-$ /g/data/wp00/users/dbi599/miniconda3/envs/cih/bin/python /g/data/wp00/shared_code/frequency-analysis/return_period.py /g/data/zv2/agcd/v1/precip/total/r005/01month/agcd_v1_precip_total_r005_monthly_197* precip /g/data/wp00/users/dbi599/precip_ari_AGCD_1970-1979.nc --return_periods 5 10 20 --dataset AGCD 
+$ /g/data/wp00/users/dbi599/miniconda3/envs/cih/bin/python /g/data/wp00/shared_code/frequency-analysis/eva.py /g/data/zv2/agcd/v1/precip/total/r005/01month/agcd_v1_precip_total_r005_monthly_197* precip /g/data/wp00/users/dbi599/precip_ari_AGCD_1970-1979.nc --quantiles 0.8 0.9 0.95 --dataset AGCD 
 ```
 
 The AGCD data files are not CF compliant and are thus incompatible with the xclim library,
