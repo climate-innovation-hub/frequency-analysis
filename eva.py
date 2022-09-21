@@ -95,10 +95,6 @@ def subset_and_chunk(ds, var, time_period=None, lon_chunk_size=None):
         start_date, end_date = time_period
         ds = ds.sel({'time': slice(start_date, end_date)})
 
-#    selection_lat = (ds['lat'] >= -35) & (ds['lat'] <= -33)
-#    selection_lon = (ds['lon'] >= 133) & (ds['lon'] <= 135)
-#    ds = ds.where(selection_lat & selection_lon, drop=True)
-
     chunk_dict = {'time': -1}
     if lon_chunk_size:
         chunk_dict['lon'] = lon_chunk_size
@@ -109,7 +105,49 @@ def subset_and_chunk(ds, var, time_period=None, lon_chunk_size=None):
     return ds
 
 
-def extreme_value_analysis(da, mode, distribution, fit_method, quantiles, month=None, season=None):
+def single2list(item, numpy_array=False):
+    """Check if item is a list and convert if it is not."""
+    
+    if type(item) == list or type(item) == tuple or type(item) == numpy.ndarray:
+        output = item 
+    elif type(item) == str:
+        output = [item,]
+    else:
+        try:
+            test = len(item)
+        except TypeError:
+            output = [item,]
+
+    return output
+
+
+def aep_to_quantile(aep, mode):
+    """Annual exceedance probability to quantile"""
+
+    if mode == 'max':
+        quantile =  1 - (aep / 100.)
+    elif mode == 'min':
+        quantile = aep / 100.
+    else:
+        raise ValueError('Invalid mode')
+    
+    return quantile
+
+    
+def ari_to_quantile(ari, mode):
+    """Annual return interval to quantile"""
+    
+    if mode == 'max':
+        quantile = 1 - (1. / ari)
+    elif mode == 'min':
+        quantile = 1. / ari
+    else:
+        raise ValueError('Invalid mode') 
+        
+    return quantile
+
+
+def extreme_value_analysis(da, mode, distribution, fit_method, extreme_type, extreme_values, month=None, season=None):
     """Perform extreme value analysis using the block maxima method.
 
     Parameters
@@ -121,8 +159,12 @@ def extreme_value_analysis(da, mode, distribution, fit_method, quantiles, month=
         Name of the univariate probability distribution
     fit_method : {'ML', 'PWM'}
         Fitting method, either maximum likelihood (ML) or probability weighted moments (PWM; aka l-moments)
-    quantiles : Union[float, sequence]
-        Quantiles to compute, which must be between 0 and 1 (inclusive)
+    extreme_type : {'ari', 'aep', 'quantile'}
+        Type of extreme to return
+        ari = annual return interval
+        aep = annual exceedance probability
+    extreme_values : Union[float, sequence]
+        Extreme values to compute (i.e. ari, aep or quantile values)
     month : list
         Restrict analysis to these months (list of month numbers)
     season : {'DJF', 'MAM', 'JJA', 'SON'}
@@ -141,8 +183,24 @@ def extreme_value_analysis(da, mode, distribution, fit_method, quantiles, month=
     block_values = select_resample_op(da, op=mode, freq='Y', **indexer)
     block_values = block_values.chunk({'time': -1})
     params = fit(block_values, dist=distribution, method=fit_method)
+
+    extreme_values_list = single2list(extreme_values)
+    if extreme_type == 'aep':
+        quantiles = [aep_to_quantile(x, mode) for x in extreme_values_list]
+        extreme_attrs = {'long_name': 'annual exceedance probability', 'units': '%'}
+    elif extreme_type == 'ari':
+        quantiles = [ari_to_quantile(x, mode) for x in extreme_values_list]
+        extreme_attrs = {'long_name': 'annual return interval', 'units': 'years'}
+    elif extreme_type == 'quantile':
+        quantiles = extreme_values
+    else:
+        raise ValueError(f'Invalid extreme type: {extreme_type}')
     eva_da = parametric_quantile(params, q=quantiles)
-   
+    if not extreme_type == 'quantile':
+        eva_da = eva_da.rename({'quantile': extreme_type})
+        eva_da = eva_da.assign_coords({extreme_type: np.array(extreme_values_list)})
+        eva_da[extreme_type].attrs = extreme_attrs
+
     return eva_da
 
 
@@ -170,7 +228,8 @@ def main(args):
         args.mode,
         args.distribution,
         args.fit_method,
-        args.quantiles,
+        args.extreme_type,
+        args.extreme_values,
         month=args.month,
         season=args.season,
     )
@@ -192,13 +251,19 @@ if __name__ == '__main__':
     )     
     parser.add_argument("infiles", type=str, nargs='*', help="input files")
     parser.add_argument("var", type=str, help="variable name")
+    parser.add_argument(
+        "extreme_type",
+        type=str,
+        choices=('ari', 'aep', 'quantile'),
+        help="type of extreme to return (annual return interval: ari; annual exceedance probability: aep; or quantile)"
+    )
     parser.add_argument("outfile", type=str, help="output file name")
     parser.add_argument(
-        "--quantiles",
+        "--extreme_values",
         type=float,
         nargs='*',
         required=True,
-        help='quantiles to include in outfile (must lie between 0 and 1 inclusive) [required]',
+        help='extreme values to return (i.e. ari, aep or quantile values) [required]',
     )         
     parser.add_argument(
         "--mode",
