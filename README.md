@@ -35,11 +35,10 @@ $ /g/data/wp00/users/dbi599/miniconda3/envs/cih/bin/python /g/data/wp00/shared_c
 ```
 
 ```
-usage: eva.py [-h] --extreme_values [EXTREME_VALUES ...] [--mode {min,max}]
-              [--distribution {genextreme,gennorm,gumbel_r,gumbel_l}] [--fit_method {ML,PWM}]
-              [--time_period START_DATE END_DATE] [--season {DJF,MAM,JJA,SON}] [--month [MONTH ...]]
-              [--dataset {AGCD}] [--memory_vis] [--verbose] [--local_cluster] [--dask_dir DASK_DIR]
-              [--nworkers NWORKERS] [--lon_chunk_size LON_CHUNK_SIZE]
+usage: eva.py [-h] --extreme_values [EXTREME_VALUES ...] [--mode {min,max}] [--distribution {genextreme,gennorm,gumbel_r,gumbel_l}]
+              [--fit_method {ML,PWM}] [--time_period START_DATE END_DATE] [--time_freq TIME_FREQ]
+              [--drop_edge_times {neither,first,last,both}] [--season {DJF,MAM,JJA,SON}] [--month [MONTH ...]] [--dataset {AGCD}]
+              [--memory_vis] [--verbose] [--local_cluster] [--dask_dir DASK_DIR] [--nworkers NWORKERS] [--lon_chunk_size LON_CHUNK_SIZE]
               [infiles ...] var {ari,aep,quantile} outfile
 
 Command line program for conducting extreme value analysis using the block maxima method.
@@ -47,8 +46,7 @@ Command line program for conducting extreme value analysis using the block maxim
 positional arguments:
   infiles               input files
   var                   variable name
-  {ari,aep,quantile}    type of extreme to return (annual return interval: ari; annual exceedance probability:
-                        aep; or quantile)
+  {ari,aep,quantile}    type of extreme to return (annual return interval: ari; annual exceedance probability: aep; or quantile)
   outfile               output file name
 
 options:
@@ -59,10 +57,13 @@ options:
   --distribution {genextreme,gennorm,gumbel_r,gumbel_l}
                         Name of the univariate probability distribution [default=genextreme]
   --fit_method {ML,PWM}
-                        Fitting method, either maximum likelihood (ML) or probability weighted moments (PWM; aka
-                        l-moments) [default=ML]
+                        Fitting method, either maximum likelihood (ML) or probability weighted moments (PWM; aka l-moments) [default=ML]
   --time_period START_DATE END_DATE
                         Time period in YYYY-MM-DD format
+  --time_freq TIME_FREQ
+                        Time frequency for blocks (e.g. A-JUN is a July-June year) [default is calendar year]
+  --drop_edge_times {neither,first,last,both}
+                        Drop first and/or last time step after block aggregation (e.g. for A-JUN the first and last year might be incomplete)
   --season {DJF,MAM,JJA,SON}
                         Only process data for a given season [default is annual]
   --month [MONTH ...]   Only process data from a list of months [default is all months]
@@ -73,7 +74,7 @@ options:
   --dask_dir DASK_DIR   Directory where dask worker space files can be written. Required for local cluster.
   --nworkers NWORKERS   Number of workers for cluster
   --lon_chunk_size LON_CHUNK_SIZE
-                        Size of longitude chunks (i.e. number of lons in each chunk)```
+                        Size of longitude chunks (i.e. number of lons in each chunk)
 ```
 
 By default,
@@ -81,7 +82,7 @@ the script will fit a GEV distribution to the (annual) block maxima of your data
 You simply need to specify the type of extreme you're looking for (i.e. annual return interval, annual exceedance probability or quantile)
 and which values you'd like returned (using the `--extreme_values` option).
 The processing will then be done on a single core.
-Essentially all aspects of the analysis (e.g. fitting method, distribution) and processing (i.e. parallel processing using dask)
+Essentially all aspects of the analysis (e.g. fitting method, distribution, blocks) and processing (i.e. parallel processing using dask)
 can be customised using the options listed above.
 
 ### Example 1
@@ -89,8 +90,14 @@ can be customised using the options listed above.
 FFDI data could be processed to calculate the 20 year return period as follows:
 
 ```
-/g/data/wp00/users/dbi599/miniconda3/envs/cih/bin/python /g/data/wp00/shared_code/frequency-analysis/eva.py /g/data/wp00/QQSCALE/GFDL-ESM2M/FFDI/rcp45/2016-2045/ffdi.????.nc FFDI ari ffdi_ARI_20yr_GFDL-ESM2M-QME_rcp45_2016-2045.nc --extreme_values 20 --verbose --lon_chunk_size 5 --local_cluster --dask_dir /g/data/wp00/users/dbi599/
+/g/data/wp00/users/dbi599/miniconda3/envs/cih/bin/python /g/data/wp00/shared_code/frequency-analysis/eva.py /g/data/wp00/QQSCALE/GFDL-ESM2M/FFDI/rcp45/2016-2045/ffdi.????.nc FFDI ari ffdi_ARI_20yr_GFDL-ESM2M-QME_rcp45_2016-2045_A-JUN.nc --time_freq A-JUN --drop_edge_times both --extreme_values 20 --verbose --lon_chunk_size 5 --local_cluster --dask_dir /g/data/wp00/users/dbi599/
 ```
+
+Instead of using calendar years for each block,
+the `--time_freq` option (with value `A-JUN`) has been used to select blocks that run from July to June.
+The first and last time step will be incomplete (i.e. they'll only have 6 months of input data)
+so the `--drop_edge_times` option (with value `both`) has been used to drop
+the first and last time step after block aggregation.
 
 In order to run the calculation in parallel,
 the data have been chunked along the longitude axis (with 5 latitude values per chunk; `--lon_chunk_size 5`)
@@ -110,7 +117,7 @@ the job file might look like the following:
 #PBS -l wd
 #PBS -l ncpus=5
 
-/g/data/wp00/users/dbi599/miniconda3/envs/cih/bin/python /g/data/wp00/shared_code/frequency-analysis/eva.py /g/data/wp00/QQSCALE/GFDL-ESM2M/FFDI/rcp45/2016-2045/ffdi.????.nc FFDI ari /g/data/wp00/users/dbi599/test_space/ffdi_test.nc --extreme_values 20 --verbose --lon_chunk_size 5 --local_cluster --dask_dir /g/data/wp00/users/dbi599/
+/g/data/wp00/users/dbi599/miniconda3/envs/cih/bin/python /g/data/wp00/shared_code/frequency-analysis/eva.py /g/data/wp00/QQSCALE/GFDL-ESM2M/FFDI/rcp45/2016-2045/ffdi.????.nc FFDI ari /g/data/wp00/users/dbi599/test_space/ffdi_ARI_20yr_GFDL-ESM2M-QME_rcp45_2016-2045_A-JUN.nc --time_freq A-JUN --drop_edge_times both --extreme_values 20 --verbose --lon_chunk_size 5 --local_cluster --dask_dir /g/data/wp00/users/dbi599/
 ```
 
 ### Example 2

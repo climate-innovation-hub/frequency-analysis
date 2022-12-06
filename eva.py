@@ -147,7 +147,30 @@ def ari_to_quantile(ari, mode):
     return quantile
 
 
-def extreme_value_analysis(da, mode, distribution, fit_method, extreme_type, extreme_values, month=None, season=None):
+def crop_edge_times(da, drop):
+    """Crop edges of time axis"""
+    
+    if drop == 'neither':
+        start = None
+        stop = None
+    elif drop == 'first':
+        start = 1
+        stop = None
+    elif drop == 'last':
+        start = None
+        stop = -1
+    elif drop == 'both':
+        start = 1
+        stop = -1
+    else:
+        raise ValueError('Invalid crop time edges')
+
+    return da.isel({'time': slice(start, stop)})
+
+
+def extreme_value_analysis(
+    da, mode, distribution, fit_method, extreme_type, extreme_values, freq='Y', drop_edge_times='neither', month=None, season=None
+):
     """Perform extreme value analysis using the block maxima method.
 
     Parameters
@@ -165,14 +188,26 @@ def extreme_value_analysis(da, mode, distribution, fit_method, extreme_type, ext
         aep = annual exceedance probability
     extreme_values : Union[float, sequence]
         Extreme values to compute (i.e. ari, aep or quantile values)
-    month : list
+    freq : str, default Y
+        Time frequency for blocks
+    drop_edge_times : {'neither', 'first', 'last', 'both'}, default neither
+        Drop first and/or last time step after block aggregation
+        (e.g. for freq = A-JUN the first and last year might be incomplete)
+    month : list, optional
         Restrict analysis to these months (list of month numbers)
-    season : {'DJF', 'MAM', 'JJA', 'SON'}
+    season : {'DJF', 'MAM', 'JJA', 'SON'}, optional
         Restrict analysis to a particular season
         
     Returns
     -------
     eva_da : xarray DataArray
+
+    Notes
+    -----
+    Example time frequency (freq) options:
+      A-DEC = annual, with date label being last day of year
+      A-NOV = annual Dec-Nov, date label being last day of the year
+      A-AUG = annual Sep-Aug, date label being last day of the year
     """
 
     indexer = {}
@@ -180,7 +215,8 @@ def extreme_value_analysis(da, mode, distribution, fit_method, extreme_type, ext
         indexer = {'season': season}
     elif month:
         indexer = {'month': month}
-    block_values = select_resample_op(da, op=mode, freq='Y', **indexer)
+    block_values = select_resample_op(da, op=mode, freq=freq, **indexer)
+    block_values = crop_edge_times(block_values, drop_edge_times)
     block_values = block_values.chunk({'time': -1})
     params = fit(block_values, dist=distribution, method=fit_method)
 
@@ -230,6 +266,8 @@ def main(args):
         args.fit_method,
         args.extreme_type,
         args.extreme_values,
+        freq=args.time_freq,
+        drop_edge_times=args.drop_edge_times,
         month=args.month,
         season=args.season,
     )
@@ -293,6 +331,19 @@ if __name__ == '__main__':
         default=None,
         metavar=('START_DATE', 'END_DATE'),
         help='Time period in YYYY-MM-DD format',
+    )
+    parser.add_argument(
+        "--time_freq",
+        type=str,
+        default='Y',
+        help='Time frequency for blocks (e.g. A-JUN is a July-June year) [default is calendar year]',
+    )
+    parser.add_argument(
+        "--drop_edge_times",
+        type=str,
+        default='neither',
+        choices=['neither', 'first', 'last', 'both'],
+        help='Drop first and/or last time step after block aggregation (e.g. for A-JUN the first and last year might be incomplete)',
     )
     parser.add_argument(
         "--season",
