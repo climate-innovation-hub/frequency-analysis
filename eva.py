@@ -97,7 +97,8 @@ def subset_and_chunk(ds, var, time_period=None, lon_chunk_size=None):
 
     chunk_dict = {'time': -1}
     if lon_chunk_size:
-        chunk_dict['lon'] = lon_chunk_size
+        lon_dim = 'longitude' if 'longitude' in ds.dims else 'lon'
+        chunk_dict[lon_dim] = lon_chunk_size
     ds = ds.chunk(chunk_dict)
     logging.debug(f'Array size: {ds[var].shape}')
     logging.debug(f'Chunk size: {ds[var].chunksizes}')
