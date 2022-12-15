@@ -6,6 +6,7 @@ import logging
 import git
 import numpy as np
 import xarray as xr
+import xclim as xc
 from xclim.indices.generic import select_resample_op
 from xclim.indices.stats import fit, parametric_quantile
 import dask.diagnostics
@@ -69,7 +70,7 @@ def fix_metadata(ds, dataset_name, variable_name):
     return ds
 
 
-def read_data(infiles, variable_name, dataset_name=None):
+def read_data(infiles, variable_name, dataset_name=None, input_units=None, output_units=None):
     """Read the input data file/s."""
 
     if len(infiles) == 1:
@@ -79,6 +80,12 @@ def read_data(infiles, variable_name, dataset_name=None):
 
     if dataset_name:
         ds = fix_metadata(ds, dataset_name, variable_name)
+
+    if input_units:
+        ds[variable_name].attrs['units'] = input_units
+    if output_units:
+        ds[variable_name] = xc.units.convert_units_to(ds[variable_name], output_units)
+        ds[variable_name].attrs['units'] = output_units
 
     try:
         ds = ds.drop('height')
@@ -253,7 +260,13 @@ def main(args):
     else:
         dask.diagnostics.ProgressBar().register()
 
-    ds = read_data(args.infiles, args.var, dataset_name=args.dataset)
+    ds = read_data(
+        args.infiles,
+        args.var,
+        dataset_name=args.dataset,
+        input_units=args.input_units,
+        output_units=args.output_units,
+    )
     ds = subset_and_chunk(
         ds,
         args.var,
@@ -366,6 +379,18 @@ if __name__ == '__main__':
         choices=['AGCD'],
         default=None,
         help='Apply dataset and variable specific metadata fixes for CF compliance',
+    )
+    parser.add_argument(
+        "--input_units",
+        type=str,
+        default=None,
+        help="input data units (will override any units listed in file metadata)"
+    )
+    parser.add_argument(
+        "--output_units",
+        type=str,
+        default=None,
+        help="output data units"
     )
     parser.add_argument(
         "--memory_vis",
