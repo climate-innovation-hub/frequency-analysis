@@ -24,7 +24,7 @@ def profiling_stats(rprof):
     logging.debug(f'Peak CPU usage: {max_cpus}%')
     
 
-def get_new_log(infile_name, infile_history):
+def get_new_log(infile_log=None):
     """Generate command log for output file."""
 
     try:
@@ -33,7 +33,7 @@ def get_new_log(infile_name, infile_history):
     except (git.exc.InvalidGitRepositoryError, NameError):
         repo_url = None
     new_log = cmdprov.new_log(
-        infile_logs={infile_name: infile_history},
+        infile_logs=infile_log,
         code_url=repo_url,
     )
 
@@ -291,7 +291,11 @@ def main(args):
     output_ds = eva_da.to_dataset()
     
     output_ds.attrs = ds.attrs
-    output_ds.attrs['history'] = get_new_log(args.infiles[0], ds.attrs['history'])
+    if 'history' in ds.attrs['history']:
+        infile_log = {args.infiles[0]: ds.attrs['history']}
+    else:
+        infile_log = None
+    output_ds.attrs['history'] = get_new_log(infile_log)
     output_ds.to_netcdf(args.outfile)
 
 
