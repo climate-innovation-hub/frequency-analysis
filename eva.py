@@ -291,7 +291,7 @@ def main(args):
     output_ds = eva_da.to_dataset()
     
     output_ds.attrs = ds.attrs
-    if 'history' in ds.attrs['history']:
+    if 'history' in ds.attrs:
         infile_log = {args.infiles[0]: ds.attrs['history']}
     else:
         infile_log = None
