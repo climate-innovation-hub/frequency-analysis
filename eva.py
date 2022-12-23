@@ -92,6 +92,14 @@ def read_data(infiles, variable_name, dataset_name=None, input_units=None, outpu
     except ValueError:
         pass
 
+    try:
+        lat_dim = 'latitude' if 'latitude' in ds.dims else 'lat'
+        lat_axis = ds[lat_dim].values
+        if lat_axis[-1] < lat_axis[0]:
+            ds = ds.isel({lat_dim: slice(None, None, -1)})
+    except KeyError:
+        pass
+
     return ds
 
 
