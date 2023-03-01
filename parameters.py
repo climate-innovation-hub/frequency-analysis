@@ -9,7 +9,7 @@ from xclim.indices.stats import frequency_analysis, fit
 import dask.diagnostics
 from dask.distributed import Client, LocalCluster, progress
     
-import return_period
+import eva
 
 
 def get_parameters(da, distribution, mode, month=None, season=None):
@@ -44,8 +44,8 @@ def main(args):
     else:
         dask.diagnostics.ProgressBar().register()
 
-    ds = return_period.read_data(args.infiles, args.var, dataset_name=args.dataset)
-    ds = return_period.subset_and_chunk(
+    ds = eva.read_data(args.infiles, args.var, dataset_name=args.dataset)
+    ds = eva.subset_and_chunk(
         ds,
         args.var,
         time_period=args.time_period,
@@ -61,7 +61,7 @@ def main(args):
     output_ds = params.to_dataset()
     
     output_ds.attrs = ds.attrs
-    output_ds.attrs['history'] = return_period.get_new_log(args.infiles[0], ds.attrs['history'])
+    output_ds.attrs['history'] = eva.get_new_log(args.infiles[0], ds.attrs['history'])
     output_ds.to_netcdf(args.outfile)
 
 
@@ -145,5 +145,5 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     with dask.diagnostics.ResourceProfiler() as rprof:
         main(args)
-    return_period.profiling_stats(rprof)
+    eva.profiling_stats(rprof)
 
