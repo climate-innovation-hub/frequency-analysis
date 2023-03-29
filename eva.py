@@ -136,16 +136,25 @@ def single2list(item, numpy_array=False):
 
     return output
 
+
 def aep_to_ari(aep):
-    """Convert from aep (%) to ari (years)"""
+    """Convert from aep (%) to ari (years)
+    
+    Details: http://www.bom.gov.au/water/designRainfalls/ifd-arr87/glossary.shtml
+    """
+    
     assert aep < 100, "aep to be expressed as a percentage (must be < 100)"
     aep = aep/100
-    return 1/(-np.log(1-aep))
+    
+    return 1 / (-np.log(1-aep))
 
 
 def ari_to_aep(ari):
-    """Convert from ari (years) to aep (%)"""
-    return ((np.exp(1/ari) - 1)/np.exp(1/ari)) * 100
+    """Convert from ari (years) to aep (%)
+    
+    Details: http://www.bom.gov.au/water/designRainfalls/ifd-arr87/glossary.shtml
+    """
+    return ((np.exp(1/ari) - 1) / np.exp(1/ari)) * 100
 
 
 def aep_to_quantile(aep, mode):
