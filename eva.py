@@ -151,12 +151,7 @@ def ari_to_aep(ari):
 def aep_to_quantile(aep, mode):
     """Annual exceedance probability to quantile"""
     
-    if mode == 'max':
-        quantile = 1 - (1. / aep_to_ari(aep))
-    elif mode == 'min':
-        quantile = 1. / aep_to_ari(aep)
-    else:
-        raise ValueError('Invalid mode')
+    quantile = ari_to_quantile(aep_to_ari(aep), mode)
     
     return quantile
 
