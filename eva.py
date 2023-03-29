@@ -138,8 +138,7 @@ def single2list(item, numpy_array=False):
 
 def aep_to_ari(aep):
     """Convert from aep (%) to ari (years)"""
-    assert aep >= 1, "aep to be expressed as an integer percentage (1-99)"
-    assert aep < 100, "aep to be expressed as an integer percentage (1-99)"
+    assert aep < 100, "aep to be expressed as a percentage (must be < 100)"
     aep = aep/100
     return 1/(-np.log(1-aep))
 
