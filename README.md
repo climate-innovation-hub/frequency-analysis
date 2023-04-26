@@ -46,7 +46,7 @@ Command line program for conducting extreme value analysis using the block maxim
 positional arguments:
   infiles               input files
   var                   variable name
-  {ari,aep,quantile}    type of extreme to return (annual return interval: ari; annual exceedance probability: aep; or quantile)
+  {ari,aep,quantile}    type of extreme to return (average recurrence interval: ari; annual exceedance probability: aep; or quantile)
   outfile               output file name
 
 options:
@@ -79,7 +79,7 @@ options:
 
 By default,
 the script will fit a GEV distribution to the (annual) block maxima of your data using the maximum likelihood fitting method.
-You simply need to specify the type of extreme you're looking for (i.e. annual return interval, annual exceedance probability or quantile)
+You simply need to specify the type of extreme you're looking for (i.e. average recurrence interval, annual exceedance probability or quantile)
 and which values you'd like returned (using the `--extreme_values` option).
 The processing will then be done on a single core.
 Essentially all aspects of the analysis (e.g. fitting method, distribution, blocks) and processing (i.e. parallel processing using dask)

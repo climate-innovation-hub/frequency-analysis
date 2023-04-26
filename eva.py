@@ -166,7 +166,7 @@ def aep_to_quantile(aep, mode):
 
     
 def ari_to_quantile(ari, mode):
-    """Annual return interval to quantile"""
+    """Average recurrence interval to quantile"""
     
     if mode == 'max':
         quantile = 1 - (1. / ari)
@@ -334,7 +334,7 @@ if __name__ == '__main__':
         "extreme_type",
         type=str,
         choices=('ari', 'aep', 'quantile'),
-        help="type of extreme to return (annual return interval: ari; annual exceedance probability: aep; or quantile)"
+        help="type of extreme to return (average recurrence interval: ari; annual exceedance probability: aep; or quantile)"
     )
     parser.add_argument("outfile", type=str, help="output file name")
     parser.add_argument(
