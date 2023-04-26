@@ -215,7 +215,7 @@ def extreme_value_analysis(
         Fitting method, either maximum likelihood (ML) or probability weighted moments (PWM; aka l-moments)
     extreme_type : {'ari', 'aep', 'quantile'}
         Type of extreme to return
-        ari = annual return interval
+        ari = average recurrence interval
         aep = annual exceedance probability
     extreme_values : Union[float, sequence]
         Extreme values to compute (i.e. ari, aep or quantile values)
@@ -257,7 +257,7 @@ def extreme_value_analysis(
         extreme_attrs = {'long_name': 'annual exceedance probability', 'units': '%'}
     elif extreme_type == 'ari':
         quantiles = [ari_to_quantile(x, mode) for x in extreme_values_list]
-        extreme_attrs = {'long_name': 'annual return interval', 'units': 'years'}
+        extreme_attrs = {'long_name': 'average recurrence interval', 'units': 'years'}
     elif extreme_type == 'quantile':
         quantiles = extreme_values
     else:
