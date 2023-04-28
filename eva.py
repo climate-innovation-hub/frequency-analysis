@@ -12,7 +12,7 @@ from xclim.indices.stats import fit, parametric_quantile
 import dask.diagnostics
 from dask.distributed import Client, LocalCluster, progress
 import cmdline_provenance as cmdprov
-
+ 
 
 def profiling_stats(rprof):
     """Record profiling information."""
@@ -40,7 +40,7 @@ def get_new_log(infile_log=None):
     return new_log
 
 
-def fix_metadata(ds, dataset_name, variable_name):
+def fix_input_metadata(ds, dataset_name, variable_name):
     """Apply dataset- and variable-specific metdata fixes.
 
     xclim does CF-compliance checks that some datasets fail
@@ -79,7 +79,7 @@ def read_data(infiles, variable_name, dataset_name=None, input_units=None, outpu
         ds = xr.open_mfdataset(infiles)
 
     if dataset_name:
-        ds = fix_metadata(ds, dataset_name, variable_name)
+        ds = fix_input_metadata(ds, dataset_name, variable_name)
 
     if input_units:
         ds[variable_name].attrs['units'] = input_units
@@ -109,7 +109,6 @@ def subset_and_chunk(ds, var, time_period=None, lon_chunk_size=None):
     if time_period:
         start_date, end_date = time_period
         ds = ds.sel({'time': slice(start_date, end_date)})
-
     chunk_dict = {'time': -1}
     if lon_chunk_size:
         lon_dim = 'longitude' if 'longitude' in ds.dims else 'lon'
@@ -199,8 +198,69 @@ def crop_edge_times(da, drop):
     return da.isel({'time': slice(start, stop)})
 
 
+def fix_output_metadata(da, mode, freq, extreme_type, outvar=None, season=None, month=None):
+    """Edit xclim default output variable attributes.
+
+    Parameters
+    ----------
+    da : xarray DataArray
+    mode : {'min', 'max'}
+        Look for probability of exceedance (max) or non-exceedance (min)
+    freq : str
+        Time frequency for blocks
+    extreme_type : {'ari', 'aep', 'quantile'}
+        Type of extreme to return
+        ari = average recurrence interval
+        aep = annual exceedance probability
+    outvar : str, optional
+        Name of custom output variable
+    month : list, optional
+        Restrict analysis to these months (list of month numbers)
+    season : {'DJF', 'MAM', 'JJA', 'SON'}, optional
+        Restrict analysis to a particular season
+
+    """
+
+    del da.attrs['cell_methods']
+    del da.attrs['method']
+    del da.attrs['history']
+    da.attrs['long_name'] = da.attrs['original_long_name']
+    del da.attrs['original_long_name']
+
+    da.attrs['block_frequency'] = freq
+    extreme_type_text = extreme_type.upper() if extreme_type in ['ari', 'aep'] else extreme_type
+    da.attrs['description'] = da.attrs['description'].replace('Quantile', extreme_type_text)
+    if mode == 'min':
+        da.attrs['direction'] = 'probability of non-exceedance'
+    elif mode == 'max':
+        da.attrs['direction'] = 'probability of exceedance'
+    if season:
+        da.attrs['season'] = season
+    if month:
+        da.attrs['months'] = str(month)
+
+    if outvar:
+        da = da.rename(outvar)
+        if outvar in ['txx', 'tnx']:
+            da.attrs['long_name'] = 'Maxima of ' + da.attrs['long_name']
+        elif outvar in ['txn', 'tnn']:
+            da.attrs['long_name'] = 'Minima of ' + da.attrs['long_name']
+             
+    return da
+    
+
 def extreme_value_analysis(
-    da, mode, distribution, fit_method, extreme_type, extreme_values, freq='Y', drop_edge_times='neither', month=None, season=None
+    da,
+    mode,
+    distribution,
+    fit_method,
+    extreme_type,
+    extreme_values,
+    freq='Y',
+    drop_edge_times='neither',
+    outvar=None,
+    month=None,
+    season=None,
 ):
     """Perform extreme value analysis using the block maxima method.
 
@@ -224,6 +284,8 @@ def extreme_value_analysis(
     drop_edge_times : {'neither', 'first', 'last', 'both'}, default neither
         Drop first and/or last time step after block aggregation
         (e.g. for freq = A-JUN the first and last year might be incomplete)
+    outvar : str, optional
+        Name of custom output variable
     month : list, optional
         Restrict analysis to these months (list of month numbers)
     season : {'DJF', 'MAM', 'JJA', 'SON'}, optional
@@ -268,6 +330,8 @@ def extreme_value_analysis(
         eva_da = eva_da.assign_coords({extreme_type: np.array(extreme_values_list)})
         eva_da[extreme_type].attrs = extreme_attrs
 
+    eva_da = fix_output_metadata(eva_da, mode, freq, extreme_type, outvar=outvar, season=None, month=None)
+
     return eva_da
 
 
@@ -285,19 +349,19 @@ def main(args):
 
     ds = read_data(
         args.infiles,
-        args.var,
+        args.invar,
         dataset_name=args.dataset,
         input_units=args.input_units,
         output_units=args.output_units,
     )
     ds = subset_and_chunk(
         ds,
-        args.var,
+        args.invar,
         time_period=args.time_period,
         lon_chunk_size=args.lon_chunk_size,
     )
     eva_da = extreme_value_analysis(
-        ds[args.var],
+        ds[args.invar],
         args.mode,
         args.distribution,
         args.fit_method,
@@ -305,6 +369,7 @@ def main(args):
         args.extreme_values,
         freq=args.time_freq,
         drop_edge_times=args.drop_edge_times,
+        outvar=args.outvar,
         month=args.month,
         season=args.season,
     )
@@ -314,6 +379,7 @@ def main(args):
     output_ds = eva_da.to_dataset()
     
     output_ds.attrs = ds.attrs
+    output_ds.attrs['xclim_version'] = xc.__version__
     if 'history' in ds.attrs:
         infile_log = {args.infiles[0]: ds.attrs['history']}
     else:
@@ -329,7 +395,7 @@ if __name__ == '__main__':
         formatter_class=argparse.RawDescriptionHelpFormatter
     )     
     parser.add_argument("infiles", type=str, nargs='*', help="input files")
-    parser.add_argument("var", type=str, help="variable name")
+    parser.add_argument("invar", type=str, help="input variable name")
     parser.add_argument(
         "extreme_type",
         type=str,
@@ -343,6 +409,12 @@ if __name__ == '__main__':
         nargs='*',
         required=True,
         help='extreme values to return (i.e. ari, aep or quantile values) [required]',
+    )
+    parser.add_argument(
+        "--outvar",
+        type=str,
+        default=None,
+        help="custom output variable name [default=invar]"
     )         
     parser.add_argument(
         "--mode",
