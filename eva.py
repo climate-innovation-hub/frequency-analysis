@@ -1,4 +1,4 @@
-"""Command line program for conducting extreme value analysis using the block maxima method."""
+"""Command line program for conducting extreme value analysis using the block maxima/minima method."""
 
 import argparse
 import logging
@@ -205,7 +205,7 @@ def fix_output_metadata(da, mode, freq, extreme_type, outvar=None, season=None, 
     ----------
     da : xarray DataArray
     mode : {'min', 'max'}
-        Look for probability of exceedance (max) or non-exceedance (min)
+        Block reduction operation (i.e. block maxima or minima)
     freq : str
         Time frequency for blocks
     extreme_type : {'ari', 'aep', 'quantile'}
@@ -232,19 +232,17 @@ def fix_output_metadata(da, mode, freq, extreme_type, outvar=None, season=None, 
     da.attrs['description'] = da.attrs['description'].replace('Quantile', extreme_type_text)
     if mode == 'min':
         da.attrs['direction'] = 'probability of non-exceedance'
+        da.attrs['long_name'] = 'Block Minima of ' + da.attrs['long_name']
     elif mode == 'max':
         da.attrs['direction'] = 'probability of exceedance'
+        da.attrs['long_name'] = 'Block Maxima of ' + da.attrs['long_name']
     if season:
         da.attrs['season'] = season
     if month:
         da.attrs['months'] = str(month)
 
     if outvar:
-        da = da.rename(outvar)
-        if outvar in ['txx', 'tnx']:
-            da.attrs['long_name'] = 'Maxima of ' + da.attrs['long_name']
-        elif outvar in ['txn', 'tnn']:
-            da.attrs['long_name'] = 'Minima of ' + da.attrs['long_name']
+        da = da.rename(outvar)            
              
     return da
     
@@ -268,7 +266,7 @@ def extreme_value_analysis(
     ----------
     da : xarray DataArray
     mode : {'min', 'max'}
-        Look for probability of exceedance (max) or non-exceedance (min)
+        Block reduction operation (i.e. block maxima or minima)
     distribution : {'genextreme', 'gennorm', 'gumbel_r', 'gumbel_l'} 
         Name of the univariate probability distribution
     fit_method : {'ML', 'PWM'}
@@ -421,7 +419,7 @@ if __name__ == '__main__':
         type=str,
         choices=['min', 'max'],
         default='max',
-        help='probability of exceedance (max) or non-exceedance (min) [default=max]',
+        help='Block reduction operation (i.e. block maxima or minima) [default=max]',
     )
     parser.add_argument(
         "--distribution",
