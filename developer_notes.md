@@ -1,22 +1,22 @@
 # Overview
 
 Extreme value analysis typically begins by defining a set of extreme values using
-either the Block Maxima or Peaks Over Threshold method:
-- **Block Maxima** extreme values are extracted by selecting a block size (typically 1 year),
+either the Block Maxima/Minima or Peaks Over/Under Threshold method:
+- **Block Maxima/Minima**: extreme values are extracted by selecting a block size (typically 1 year),
 then partitioning your time series data into equal consecutive blocks of this size
-and taking the maximum value from each block.
-This is the simpler / more common method.
-- **Peaks Over Threshold** extreme values are extracted by choosing a threshold and selecting values higher or lower
+and taking the maximum/minimum value from each block.
+This is the simpler and more common method.
+- **Peaks Over/Under Threshold**: extreme values are extracted by choosing a threshold and selecting values higher or lower
 (depending on which extreme process is analysed) than the threshold value.
 The selected values are then de-clustered by specifying a minimum distance between adjacent clusters (e.g. 2 days),
 which means that the model assumes that clusters of exceedences separated by this distance or larger are independent.
 
 Once you've got your set of extreme values,
 the next step is to fit a statistical model to those data:
-- The **Generalised Extreme Value Distribution** (GEVD) family of continuous probability distributions is used for block maxima.
+- The **Generalised Extreme Value Distribution** (GEVD) family of continuous probability distributions is used for block maxima/minima.
 Depending on the shape parameter, a Gumbel (shape = 0), Fréchet (shape > 0), or Weibull (shape < 0) distribution will be produced.
 The location parameter represents the mean of the GEVD and the scale parameter is the multiplier that scales function (i.e. the spread/width of the distribution).
-- The **Generalised Pareto Distribution** (GPD) family of continuous probability distributions is used for peaks over threshold.
+- The **Generalised Pareto Distribution** (GPD) family of continuous probability distributions is used for peaks over/under threshold.
 Depending on the shape parameter, an Exponential (shape = 0), Pareto (shape > 0), or Beta (shape < 0) distribution will be produced.
 The location parameter represents the reference value against which the excesses are calculated and the scale parameter is the multiplier that scales function (i.e. the spread/width of the distribution).
 
